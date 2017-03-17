@@ -139,7 +139,7 @@ func main() {
 				fmt.Println(serverResponse)
 				os.Exit(1)
 			}
-			fmt.Println(writtenResponse, "\n")
+			fmt.Print(writtenResponse, "\n\n")
 			fmt.Println("Enter another text query:")
 		}
 	} else {

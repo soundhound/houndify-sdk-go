@@ -1,4 +1,4 @@
-# Houndify SDK for Go
+# Houndify SDK for Go [![Build Status](https://travis-ci.org/soundhound/houndify-sdk-go.svg?branch=master)](https://travis-ci.org/soundhound/houndify-sdk-go)
 
 houndify-sdk-go is the official Houndify SDK for the Go programming language.
 
