@@ -16,6 +16,7 @@ func createRequestInfo(clientID, requestID string, timeStamp int64, extraFields 
 	reqInfo["ClientID"] = clientID
 	reqInfo["RequestID"] = requestID
 	reqInfo["SDK"] = "Go"
+	reqInfo["SDKVersion"] = "0.1"
 	reqInfo["PartialTranscriptsDesired"] = true
 	reqInfo["ObjectByteCountPrefix"] = true
 	return reqInfo, nil
