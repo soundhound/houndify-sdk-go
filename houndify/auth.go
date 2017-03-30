@@ -15,14 +15,14 @@ func generateAuthValues(clientID, clientKey, userID, requestID string) (
 
 	timeStamp = time.Now().Unix()
 
-	//base64 decode key
+	// base64 decode key
 	decodedClientKey, err := base64.StdEncoding.DecodeString(unescapeBase64Url(clientKey))
 	if err != nil {
 		fmt.Println(err)
 		returnErr = errors.New("failed to decode client key")
 		return
 	}
-	//sign
+	// sign
 	hmac := hmac.New(sha256.New, decodedClientKey)
 	hmac.Write([]byte(userID + ";" + requestID + fmt.Sprintf("%d", timeStamp)))
 	signature := escapeBase64Url(base64.StdEncoding.EncodeToString([]byte(hmac.Sum(nil))))

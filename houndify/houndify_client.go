@@ -17,22 +17,36 @@ import (
 const houndifyVoiceURL = "https://api.houndify.com:443/v1/audio"
 const houndifyTextURL = "https://api.houndify.com:443/v1/text"
 
+// Default user agent sent set by the SDK
+const SDKUserAgent = "Go Houndify SDK"
+
 type (
+	// A Client holds the configuration and state, which is used for
+	// sending all outgoing Houndify requests and appropriately saving their responses.
 	Client struct {
-		ClientID                string
+		// The ClientID comes from the Houndify site.
+		ClientID string
+		// The ClientKey comes from the Houndify site.
+		// Keep the key secret.
 		ClientKey               string
 		enableConversationState bool
 		conversationState       interface{}
 	}
-	//create one of these per request you want to send
+	// A TextRequest holds all the information needed to make a Houndify request.
+	// Create one of these per request to send and use a Client to send it.
 	TextRequest struct {
-		Query             string //e.g. "what time is it in london"
+		// The text query, e.g. "what time is it in london"
+		Query             string
 		UserID            string
 		RequestID         string
 		RequestInfoFields map[string]interface{}
 	}
+	// A VoiceRequest holds all the information needed to make a Houndify request.
+	// Create one of these per request to send and use a Client to send it.
 	VoiceRequest struct {
-		AudioStream       io.Reader //stream of audio in bytes - must already be in correct encoding
+		// Stream of audio in bytes. It must already be in correct encoding.
+		// See the Houndify docs for details.
+		AudioStream       io.Reader
 		UserID            string
 		RequestID         string
 		RequestInfoFields map[string]interface{}
@@ -83,14 +97,14 @@ func (h *Client) SetConversationState(newState interface{}) {
 // connect, failure to parse the response, or failure to update the conversation
 // state (if applicable).
 func (h *Client) TextSearch(textReq TextRequest) (string, error) {
-	//setup http request
+	// setup http request
 	body := []byte(``)
 	req, err := http.NewRequest("POST", houndifyTextURL+"?query="+url.PathEscape(textReq.Query), bytes.NewBuffer(body))
 	if err != nil {
 		return "", errors.New("failed to build http request: " + err.Error())
 	}
-	//auth headers
-	req.Header.Set("User-Agent", "Go Houndify SDK")
+	// auth headers
+	req.Header.Set("User-Agent", SDKUserAgent)
 	clientAuth, requestAuth, timestamp, err := generateAuthValues(h.ClientID, h.ClientKey, textReq.UserID, textReq.RequestID)
 	if err != nil {
 		return "", errors.New("failed to create auth headers: " + err.Error())
@@ -98,7 +112,7 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 	req.Header.Set("Hound-Request-Authentication", requestAuth)
 	req.Header.Set("Hound-Client-Authentication", clientAuth)
 
-	//optional language headers
+	// optional language headers
 	if val, ok := textReq.RequestInfoFields["InputLanguageEnglishName"]; ok {
 		req.Header.Set("InputLanguageEnglishName", val.(string))
 	}
@@ -106,7 +120,7 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 		req.Header.Set("InputLanguageIETFTag", val.(string))
 	}
 
-	//conversation state
+	// conversation state
 	if h.enableConversationState {
 		textReq.RequestInfoFields["ConversationState"] = h.conversationState
 	} else {
@@ -114,7 +128,7 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 		textReq.RequestInfoFields["ConversationState"] = emptyConvState
 	}
 
-	//request info json
+	// request info json
 	requestInfo, err := createRequestInfo(h.ClientID, textReq.RequestID, timestamp, textReq.RequestInfoFields)
 	if err != nil {
 		return "", errors.New("failed to create request info: " + err.Error())
@@ -137,7 +151,7 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	//update with new conversation state
+	// update with new conversation state
 	if h.enableConversationState {
 		newConvState, err := parseConversationState(string(body))
 		if err != nil {
@@ -160,13 +174,13 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 // connect, failure to parse the response, or failure to update the conversation
 // state (if applicable).
 func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan PartialTranscript) (string, error) {
-	//setup http request
+	// setup http request
 	req, err := http.NewRequest("POST", houndifyVoiceURL, nil)
 	if err != nil {
 		return "", errors.New("failed to build http request: " + err.Error())
 	}
-	//auth headers
-	req.Header.Set("User-Agent", "Go Houndify SDK")
+	// auth headers
+	req.Header.Set("User-Agent", SDKUserAgent)
 	clientAuth, requestAuth, timestamp, err := generateAuthValues(h.ClientID, h.ClientKey, voiceReq.UserID, voiceReq.RequestID)
 	if err != nil {
 		return "", errors.New("failed to create auth headers: " + err.Error())
@@ -174,7 +188,7 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	req.Header.Set("Hound-Request-Authentication", requestAuth)
 	req.Header.Set("Hound-Client-Authentication", clientAuth)
 
-	//optional language headers
+	// optional language headers
 	if val, ok := voiceReq.RequestInfoFields["InputLanguageEnglishName"]; ok {
 		req.Header.Set("InputLanguageEnglishName", val.(string))
 	}
@@ -182,7 +196,7 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 		req.Header.Set("InputLanguageIETFTag", val.(string))
 	}
 
-	//conversation state
+	// conversation state
 	if h.enableConversationState {
 		voiceReq.RequestInfoFields["ConversationState"] = h.conversationState
 	} else {
@@ -190,7 +204,7 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 		voiceReq.RequestInfoFields["ConversationState"] = emptyConvState
 	}
 
-	//request info json
+	// request info json
 	requestInfo, err := createRequestInfo(h.ClientID, voiceReq.RequestID, timestamp, voiceReq.RequestInfoFields)
 	if err != nil {
 		return "", errors.New("failed to create request info: " + err.Error())
@@ -204,14 +218,14 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	req.Body = ioutil.NopCloser(voiceReq.AudioStream)
 	client := &http.Client{}
 
-	//send the request
+	// send the request
 
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", errors.New("failed to successfully run request: " + err.Error())
 	}
 
-	//partial transcript parsing
+	// partial transcript parsing
 
 	scanner := bufio.NewScanner(resp.Body)
 	var line string
@@ -221,17 +235,17 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 			continue
 		}
 		if _, convertErr := strconv.Atoi(line); convertErr == nil {
-			//this is an integer, so one of the ObjectByteCountPrefixes, skip it
+			// this is an integer, so one of the ObjectByteCountPrefixes, skip it
 			continue
 		}
-		//attempt to parse incoming json into partial transcript
+		// attempt to parse incoming json into partial transcript
 		incoming := houndServerPartialTranscript{}
 		if err := json.Unmarshal([]byte(line), &incoming); err != nil {
 			fmt.Println("fail reading hound server message")
 			continue
 		}
 		if incoming.Format == "HoundVoiceQueryPartialTranscript" || incoming.Format == "SoundHoundVoiceSearchParialTranscript" {
-			//convert from houndify server's struct to SDK's simplified struct
+			// convert from houndify server's struct to SDK's simplified struct
 			partialDuration, err := time.ParseDuration(fmt.Sprintf("%d", incoming.DurationMS) + "ms")
 			if err != nil {
 				fmt.Println("failed reading the time in partial transcript")
@@ -245,8 +259,8 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 				}
 			}()
 		} else if incoming.Format == "SoundHoundVoiceSearchResult" {
-			//it wasn't actually a partial transcript, it was a final message with everything
-			//we're done with partial transcripts now
+			// it wasn't actually a partial transcript, it was a final message with everything
+			// we're done with partial transcripts now
 			break
 		}
 	}
@@ -255,7 +269,7 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	body := line
 	defer resp.Body.Close()
 
-	//update with new conversation state
+	// update with new conversation state
 	if h.enableConversationState {
 		newConvState, err := parseConversationState(string(body))
 		if err != nil {
