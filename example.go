@@ -29,13 +29,13 @@ func main() {
 	clientKey := *clientKeyFlag
 
 	if clientID == "" {
-		//check environment variable
+		// check environment variable
 		if os.Getenv("HOUNDIFY_CLIENT_ID") != "" {
 			clientID = os.Getenv("HOUNDIFY_CLIENT_ID")
 		}
 	}
 	if clientKey == "" {
-		//check environment variable
+		// check environment variable
 		if os.Getenv("HOUNDIFY_CLIENT_KEY") != "" {
 			clientKey = os.Getenv("HOUNDIFY_CLIENT_KEY")
 		}
@@ -50,7 +50,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	//create a new client
+	// create a new client
 	client := houndify.Client{
 		ClientID:  clientID,
 		ClientKey: clientKey,
@@ -73,11 +73,11 @@ func main() {
 			RequestInfoFields: make(map[string]interface{}),
 		}
 
-		//listen for partial transcript responses
+		// listen for partial transcript responses
 		partialTranscripts := make(chan houndify.PartialTranscript)
 		go func() {
 			for partial := range partialTranscripts {
-				if partial.Message != "" { //ignore the "" partial transcripts, not really useful
+				if partial.Message != "" { // ignore the "" partial transcripts, not really useful
 					fmt.Println(partial.Message)
 				}
 			}

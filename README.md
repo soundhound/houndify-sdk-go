@@ -1,4 +1,4 @@
-# Houndify SDK for Go [![Build Status](https://travis-ci.org/soundhound/houndify-sdk-go.svg?branch=master)](https://travis-ci.org/soundhound/houndify-sdk-go)
+# Houndify SDK for Go [![Build Status](https://travis-ci.org/soundhound/houndify-sdk-go.svg?branch=master)](https://travis-ci.org/soundhound/houndify-sdk-go) [![GoDoc](https://godoc.org/github.com/soundhound/houndify-sdk-go/houndify?status.svg)](https://godoc.org/github.com/soundhound/houndify-sdk-go/houndify)
 
 houndify-sdk-go is the official Houndify SDK for the Go programming language.
 
@@ -79,7 +79,7 @@ client := houndify.Client{
 }
 ```
 
-For a voice search, create a VoiceRequest and channel for partial transcripts
+For a voice search, create a VoiceRequest and channel for partial transcripts. The audio to be streamed must already be the correct encoding that the server requires. See the [Houndify Docs](https://www.houndify.com/docs/) for details. There are example audio files to test with in `test_audio`.
 
 ```go
 req := houndify.VoiceRequest{

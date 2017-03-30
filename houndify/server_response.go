@@ -7,6 +7,10 @@ import (
 	"strings"
 )
 
+// ParseWrittenResponse will take final server response JSON (as a string)
+// and parse out the human readable text to be displayed or spoken the end user.
+// If the string is invalid JSON, the server had an error, or there was nothing
+// to reply with, an error is returned.
 func ParseWrittenResponse(serverResponseJSON string) (string, error) {
 	result := make(map[string]interface{})
 	err := json.Unmarshal([]byte(serverResponseJSON), &result)

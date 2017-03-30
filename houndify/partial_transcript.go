@@ -5,7 +5,7 @@ import (
 )
 
 type PartialTranscript struct {
-	// The text partial transcription
+	// The text of the partial transcript
 	Message string
 	// Length of audio this partial transcript applies to
 	Duration time.Duration
