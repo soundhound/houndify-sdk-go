@@ -31,6 +31,9 @@ type (
 		ClientKey               string
 		enableConversationState bool
 		conversationState       interface{}
+		// If Verbose is true, all data sent from the server is printed to stdout, unformatted and unparsed.
+		// This includes partial transcripts, errors, HTTP headers details (status code, headers, etc.), and final response JSON.
+		Verbose bool
 	}
 	// A TextRequest holds all the information needed to make a Houndify request.
 	// Create one of these per request to send and use a Client to send it.
@@ -66,29 +69,29 @@ type (
 )
 
 // EnableConversationState enables conversation state for future queries
-func (h *Client) EnableConversationState() {
-	h.enableConversationState = true
+func (c *Client) EnableConversationState() {
+	c.enableConversationState = true
 }
 
 // DisableConversationState disables conversation state for future queries
-func (h *Client) DisableConversationState() {
-	h.enableConversationState = false
+func (c *Client) DisableConversationState() {
+	c.enableConversationState = false
 }
 
 // ClearConversationState removes, or "forgets", the current conversation state
-func (h *Client) ClearConversationState() {
+func (c *Client) ClearConversationState() {
 	var emptyConvState interface{}
-	h.conversationState = emptyConvState
+	c.conversationState = emptyConvState
 }
 
 // GetConversationState returns the current conversation state, useful for saving
-func (h *Client) GetConversationState() interface{} {
-	return h.conversationState
+func (c *Client) GetConversationState() interface{} {
+	return c.conversationState
 }
 
 // SetConversationState sets the conversation state, useful for resuming from a saved point
-func (h *Client) SetConversationState(newState interface{}) {
-	h.conversationState = newState
+func (c *Client) SetConversationState(newState interface{}) {
+	c.conversationState = newState
 }
 
 // TextSearch sends a text request and returns the body of the Hound server response.
@@ -96,7 +99,7 @@ func (h *Client) SetConversationState(newState interface{}) {
 // An error is returned if there is a failure to create the request, failure to
 // connect, failure to parse the response, or failure to update the conversation
 // state (if applicable).
-func (h *Client) TextSearch(textReq TextRequest) (string, error) {
+func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 	// setup http request
 	body := []byte(``)
 	req, err := http.NewRequest("POST", houndifyTextURL+"?query="+url.PathEscape(textReq.Query), bytes.NewBuffer(body))
@@ -105,7 +108,7 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 	}
 	// auth headers
 	req.Header.Set("User-Agent", SDKUserAgent)
-	clientAuth, requestAuth, timestamp, err := generateAuthValues(h.ClientID, h.ClientKey, textReq.UserID, textReq.RequestID)
+	clientAuth, requestAuth, timestamp, err := generateAuthValues(c.ClientID, c.ClientKey, textReq.UserID, textReq.RequestID)
 	if err != nil {
 		return "", errors.New("failed to create auth headers: " + err.Error())
 	}
@@ -121,15 +124,15 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 	}
 
 	// conversation state
-	if h.enableConversationState {
-		textReq.RequestInfoFields["ConversationState"] = h.conversationState
+	if c.enableConversationState {
+		textReq.RequestInfoFields["ConversationState"] = c.conversationState
 	} else {
 		var emptyConvState interface{}
 		textReq.RequestInfoFields["ConversationState"] = emptyConvState
 	}
 
 	// request info json
-	requestInfo, err := createRequestInfo(h.ClientID, textReq.RequestID, timestamp, textReq.RequestInfoFields)
+	requestInfo, err := createRequestInfo(c.ClientID, textReq.RequestID, timestamp, textReq.RequestInfoFields)
 	if err != nil {
 		return "", errors.New("failed to create request info: " + err.Error())
 	}
@@ -151,16 +154,24 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// update with new conversation state
-	if h.enableConversationState {
-		newConvState, err := parseConversationState(string(body))
-		if err != nil {
-			return string(body), errors.New("unable to parse new conversation state from response")
-		}
-		h.conversationState = newConvState
+	bodyStr := string(body)
+
+	if c.Verbose {
+		fmt.Println(resp.Proto, resp.StatusCode)
+		fmt.Println("Headers: ", resp.Header)
+		fmt.Println(bodyStr)
 	}
 
-	return string(body), nil
+	// update with new conversation state
+	if c.enableConversationState {
+		newConvState, err := parseConversationState(bodyStr)
+		if err != nil {
+			return bodyStr, errors.New("unable to parse new conversation state from response")
+		}
+		c.conversationState = newConvState
+	}
+
+	return bodyStr, nil
 }
 
 // VoiceSearch sends an audio request and returns the body of the Hound server response.
@@ -173,7 +184,7 @@ func (h *Client) TextSearch(textReq TextRequest) (string, error) {
 // An error is returned if there is a failure to create the request, failure to
 // connect, failure to parse the response, or failure to update the conversation
 // state (if applicable).
-func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan PartialTranscript) (string, error) {
+func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan PartialTranscript) (string, error) {
 	// setup http request
 	req, err := http.NewRequest("POST", houndifyVoiceURL, nil)
 	if err != nil {
@@ -181,7 +192,7 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	}
 	// auth headers
 	req.Header.Set("User-Agent", SDKUserAgent)
-	clientAuth, requestAuth, timestamp, err := generateAuthValues(h.ClientID, h.ClientKey, voiceReq.UserID, voiceReq.RequestID)
+	clientAuth, requestAuth, timestamp, err := generateAuthValues(c.ClientID, c.ClientKey, voiceReq.UserID, voiceReq.RequestID)
 	if err != nil {
 		return "", errors.New("failed to create auth headers: " + err.Error())
 	}
@@ -197,15 +208,15 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	}
 
 	// conversation state
-	if h.enableConversationState {
-		voiceReq.RequestInfoFields["ConversationState"] = h.conversationState
+	if c.enableConversationState {
+		voiceReq.RequestInfoFields["ConversationState"] = c.conversationState
 	} else {
 		var emptyConvState interface{}
 		voiceReq.RequestInfoFields["ConversationState"] = emptyConvState
 	}
 
 	// request info json
-	requestInfo, err := createRequestInfo(h.ClientID, voiceReq.RequestID, timestamp, voiceReq.RequestInfoFields)
+	requestInfo, err := createRequestInfo(c.ClientID, voiceReq.RequestID, timestamp, voiceReq.RequestInfoFields)
 	if err != nil {
 		return "", errors.New("failed to create request info: " + err.Error())
 	}
@@ -225,12 +236,20 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 		return "", errors.New("failed to successfully run request: " + err.Error())
 	}
 
+	if c.Verbose {
+		fmt.Println(resp.Proto, resp.StatusCode)
+		fmt.Println("Headers: ", resp.Header)
+	}
+
 	// partial transcript parsing
 
 	scanner := bufio.NewScanner(resp.Body)
 	var line string
 	for scanner.Scan() {
 		line = scanner.Text()
+		if c.Verbose {
+			fmt.Println(line)
+		}
 		if line == "" {
 			continue
 		}
@@ -270,12 +289,12 @@ func (h *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	defer resp.Body.Close()
 
 	// update with new conversation state
-	if h.enableConversationState {
+	if c.enableConversationState {
 		newConvState, err := parseConversationState(string(body))
 		if err != nil {
 			return string(body), errors.New("unable to parse new conversation state from response")
 		}
-		h.conversationState = newConvState
+		c.conversationState = newConvState
 	}
 
 	return body, nil

@@ -23,6 +23,7 @@ func main() {
 	voiceFlag := flag.String("voice", "", "Audio file to use for voice query")
 	textFlag := flag.String("text", "", "Message to use for text query")
 	stdinFlag := flag.Bool("stdin", false, "Text query via stdin messages")
+	verboseFlag := flag.Bool("v", false, "Verbose mode, which prints raw server data")
 	flag.Parse()
 
 	clientID := *clientIDFlag
@@ -54,6 +55,7 @@ func main() {
 	client := houndify.Client{
 		ClientID:  clientID,
 		ClientKey: clientKey,
+		Verbose:   *verboseFlag,
 	}
 	client.EnableConversationState()
 
