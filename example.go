@@ -133,7 +133,8 @@ func main() {
 			if err != nil {
 				fmt.Println("failed to make text request: " + err.Error())
 				fmt.Println(serverResponse)
-				os.Exit(1)
+				fmt.Println("Enter another text query:")
+				continue
 			}
 			writtenResponse, err := houndify.ParseWrittenResponse(serverResponse)
 			if err != nil {
