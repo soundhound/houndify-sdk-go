@@ -162,6 +162,10 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 		fmt.Println(bodyStr)
 	}
 
+	//don't try to parse out conversation state from a bad response
+	if resp.StatusCode >= 400 {
+		return bodyStr, errors.New("error response")
+	}
 	// update with new conversation state
 	if c.enableConversationState {
 		newConvState, err := parseConversationState(bodyStr)
