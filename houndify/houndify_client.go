@@ -150,7 +150,7 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 
 	body, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return "", errors.New("failed to ready body: " + err.Error())
+		return "", errors.New("failed to read body: " + err.Error())
 	}
 	defer resp.Body.Close()
 
