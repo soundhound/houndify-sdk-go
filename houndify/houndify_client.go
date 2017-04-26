@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -247,12 +249,23 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 
 	// partial transcript parsing
 
-	scanner := bufio.NewScanner(resp.Body)
+	//so the partial transcript channel doesn't get closed before all transcripts are sent
+	partialChanWait := sync.WaitGroup{}
+	reader := bufio.NewReader(resp.Body)
 	var line string
-	for scanner.Scan() {
-		line = scanner.Text()
+	for {
+		bytes, err := reader.ReadBytes('\n')
+		line = strings.TrimSpace(string(bytes))
 		if c.Verbose {
 			fmt.Println(line)
+		}
+		if err != nil {
+			if err != io.EOF {
+				fmt.Println(err)
+				return "", errors.New("error reading Houndify server response")
+			}
+			//EOF means this line must be the final response, done with partial transcripts
+			break
 		}
 		if line == "" {
 			continue
@@ -274,32 +287,43 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 				fmt.Println("failed reading the time in partial transcript")
 				continue
 			}
+			partialChanWait.Add(1)
 			go func() {
 				partialTranscriptChan <- PartialTranscript{
 					Message:  incoming.PartialTranscript,
 					Duration: partialDuration,
 					Done:     incoming.Done,
 				}
+				partialChanWait.Done()
 			}()
-		} else if incoming.Format == "SoundHoundVoiceSearchResult" {
-			// it wasn't actually a partial transcript, it was a final message with everything
-			// we're done with partial transcripts now
+			continue
+		}
+		if incoming.Format == "SoundHoundVoiceSearchResult" {
+			//this line is the final response, done with partial transcripts
 			break
 		}
 	}
-	close(partialTranscriptChan)
+	go func() {
+		//don't close the open partial transcript channel
+		partialChanWait.Wait()
+		close(partialTranscriptChan)
+	}()
 
-	body := line
+	bodyStr := line
 	defer resp.Body.Close()
 
+	//don't try to parse out conversation state from a bad response
+	if resp.StatusCode >= 400 {
+		return bodyStr, errors.New("error response")
+	}
 	// update with new conversation state
 	if c.enableConversationState {
-		newConvState, err := parseConversationState(string(body))
+		newConvState, err := parseConversationState(bodyStr)
 		if err != nil {
-			return string(body), errors.New("unable to parse new conversation state from response")
+			return bodyStr, errors.New("unable to parse new conversation state from response")
 		}
 		c.conversationState = newConvState
 	}
 
-	return body, nil
+	return bodyStr, nil
 }
