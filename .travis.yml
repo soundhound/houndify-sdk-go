@@ -2,7 +2,6 @@ language: go
 
 go:
   - 1.8
-  - tip
 
 install:
   - go get ./...
@@ -14,7 +13,3 @@ script:
   - go vet -race ./...
   - ineffassign .
   - misspell -error .
-
-matrix:
-  allow_failures:
-    - go: tip
