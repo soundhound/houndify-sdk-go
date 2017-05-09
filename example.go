@@ -7,48 +7,52 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
+	"strings"
 
 	houndify "github.com/soundhound/houndify-sdk-go/houndify"
 )
 
-// This is not the clientId. This is the app user, so many will likely exist per clientId.
-// This value can be any string.
-// See https://www.houndify.com/docs/ for more details.
-const userID = "exampleUser"
+const (
+	// This is not the clientId. This is the app user, so many will likely exist per clientId.
+	// This value can be any string.
+	// See https://www.houndify.com/docs/ for more details.
+	userID = "exampleUser"
+
+	envClientIDKey  = "HOUNDIFY_CLIENT_ID"
+	envClientKeyKey = "HOUNDIFY_CLIENT_KEY"
+
+	cliClientIDKey  = "id"
+	cliClientKeyKey = "key"
+)
 
 func main() {
-	clientIDFlag := flag.String("id", "", "Client ID")
-	clientKeyFlag := flag.String("key", "", "Client Key")
+	clientIDFlag := flag.String(cliClientIDKey, "", "Client ID")
+	clientKeyFlag := flag.String(cliClientKeyKey, "", "Client Key")
 	voiceFlag := flag.String("voice", "", "Audio file to use for voice query")
 	textFlag := flag.String("text", "", "Message to use for text query")
 	stdinFlag := flag.Bool("stdin", false, "Text query via stdin messages")
 	verboseFlag := flag.Bool("v", false, "Verbose mode, which prints raw server data")
 	flag.Parse()
 
-	clientID := *clientIDFlag
-	clientKey := *clientKeyFlag
+	// Make log not print out time info
+	log.SetFlags(0)
 
+	clientID := derefOrFetchFromEnv(clientIDFlag, envClientIDKey)
+	clientKey := derefOrFetchFromEnv(clientKeyFlag, envClientKeyKey)
+
+	var errsList []string
 	if clientID == "" {
-		// check environment variable
-		if os.Getenv("HOUNDIFY_CLIENT_ID") != "" {
-			clientID = os.Getenv("HOUNDIFY_CLIENT_ID")
-		}
+		msg := fmt.Sprintf("must set the client ID in environment variable: %q or via commmandline flag: -%s", envClientIDKey, cliClientIDKey)
+		errsList = append(errsList, msg)
 	}
 	if clientKey == "" {
-		// check environment variable
-		if os.Getenv("HOUNDIFY_CLIENT_KEY") != "" {
-			clientKey = os.Getenv("HOUNDIFY_CLIENT_KEY")
-		}
+		msg := fmt.Sprintf("must set the client key in environment variable: %q or via commandline flag: -%s", envClientKeyKey, cliClientKeyKey)
+		errsList = append(errsList, msg)
 	}
-
-	if clientID == "" {
-		fmt.Println("Need to set the client ID")
-		os.Exit(1)
-	}
-	if clientKey == "" {
-		fmt.Println("Need to set the client key")
-		os.Exit(1)
+	if len(errsList) > 0 {
+		log.Fatalf("%s", strings.Join(errsList, "\n"))
 	}
 
 	// create a new client
@@ -59,13 +63,16 @@ func main() {
 	}
 	client.EnableConversationState()
 
-	if *voiceFlag != "" {
+	switch {
+	default:
+		log.Fatalf("must choose either voice, text or stdin")
+
+	case *voiceFlag != "":
 		// voice query
 		audioFilePath := *voiceFlag
 		fileContents, err := ioutil.ReadFile(audioFilePath)
 		if err != nil {
-			fmt.Println("failed to read contents of file " + audioFilePath + ": " + err.Error())
-			os.Exit(1)
+			log.Fatalf("failed to read contents of file %q, err: %v", audioFilePath, err)
 		}
 
 		req := houndify.VoiceRequest{
@@ -84,20 +91,18 @@ func main() {
 				}
 			}
 		}()
+
 		serverResponse, err := client.VoiceSearch(req, partialTranscripts)
 		if err != nil {
-			fmt.Println("failed to make voice request: " + err.Error())
-			fmt.Println(serverResponse)
-			os.Exit(1)
+			log.Fatalf("failed to make voice request: %v\n%s\n", err, serverResponse)
 		}
 		writtenResponse, err := houndify.ParseWrittenResponse(serverResponse)
 		if err != nil {
-			fmt.Println("failed to decode hound response")
-			fmt.Println(serverResponse)
-			os.Exit(1)
+			log.Fatalf("failed to decode hound response\n%s\n", serverResponse)
 		}
 		fmt.Println(writtenResponse)
-	} else if *textFlag != "" {
+
+	case *textFlag != "":
 		// text query
 		req := houndify.TextRequest{
 			Query:             *textFlag,
@@ -107,21 +112,18 @@ func main() {
 		}
 		serverResponse, err := client.TextSearch(req)
 		if err != nil {
-			fmt.Println("failed to make text request: " + err.Error())
-			fmt.Println(serverResponse)
-			os.Exit(1)
+			log.Fatalf("failed to make text request: %v\n%s\n", err, serverResponse)
 		}
 		writtenResponse, err := houndify.ParseWrittenResponse(serverResponse)
 		if err != nil {
-			fmt.Println("failed to decode hound response")
-			fmt.Println(serverResponse)
-			os.Exit(1)
+			log.Fatalf("failed to decode hound response\n%s\n", serverResponse)
 		}
 		fmt.Println(writtenResponse)
-	} else if *stdinFlag {
+
+	case *stdinFlag:
 		// text queries in succession, demonstrating conversation state
 		scanner := bufio.NewScanner(os.Stdin)
-		fmt.Println("Enter a text query:")
+		fmt.Println("Enter a text query: ")
 		for scanner.Scan() {
 			req := houndify.TextRequest{
 				Query:             scanner.Text(),
@@ -131,23 +133,16 @@ func main() {
 			}
 			serverResponse, err := client.TextSearch(req)
 			if err != nil {
-				fmt.Println("failed to make text request: " + err.Error())
-				fmt.Println(serverResponse)
-				fmt.Println("Enter another text query:")
+				fmt.Printf("failed to make text request: %v\n%s\nEnter another text query:", err, serverResponse)
 				continue
 			}
 			writtenResponse, err := houndify.ParseWrittenResponse(serverResponse)
 			if err != nil {
-				fmt.Println("failed to decode hound response")
-				fmt.Println(serverResponse)
-				os.Exit(1)
+				log.Fatalf("failed to decode hound response\n%s\n", serverResponse)
 			}
 			fmt.Print(writtenResponse, "\n\n")
-			fmt.Println("Enter another text query:")
+			fmt.Println("Enter another text query: ")
 		}
-	} else {
-		fmt.Println("must choose voice, text or stdin")
-		os.Exit(1)
 	}
 }
 
@@ -160,4 +155,14 @@ func createRequestID() string {
 	b := make([]byte, n)
 	rand.Read(b)
 	return fmt.Sprintf("%X", b)
+}
+
+// derefOrFetchFromEnv tries to dereference and retrieve a non-empty
+// string stored in the string pointer, otherwise it falls back
+// to retrieving the value stored in the environment keyed by envKey.
+func derefOrFetchFromEnv(strPtr *string, envKey string) string {
+	if strPtr != nil && *strPtr != "" {
+		return *strPtr
+	}
+	return os.Getenv(envKey)
 }
