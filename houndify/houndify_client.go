@@ -119,10 +119,10 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 
 	// optional language headers
 	if val, ok := textReq.RequestInfoFields["InputLanguageEnglishName"]; ok {
-		req.Header.Set("InputLanguageEnglishName", val.(string))
+		req.Header.Set("Hound-Input-Language-English-Name", val.(string))
 	}
 	if val, ok := textReq.RequestInfoFields["InputLanguageIETFTag"]; ok {
-		req.Header.Set("InputLanguageIETFTag", val.(string))
+		req.Header.Set("Hound-Input-Language-IETF-Tag", val.(string))
 	}
 
 	// conversation state
