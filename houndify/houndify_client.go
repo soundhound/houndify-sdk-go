@@ -19,7 +19,7 @@ import (
 const houndifyVoiceURL = "https://api.houndify.com:443/v1/audio"
 const houndifyTextURL = "https://api.houndify.com:443/v1/text"
 
-// Default user agent sent set by the SDK
+// Default user agent set by the SDK
 const SDKUserAgent = "Go Houndify SDK"
 
 type (
