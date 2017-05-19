@@ -13,7 +13,7 @@ The SDK allows you to make voice and text queries to the Houndify API. The SDK c
 
 To use the SDK and/or example app, you will need a client ID and client key. You can get those after creating a [Houndify](https://www.houndify.com) account and registering a client.
 
-Once you have set your `$GOPATH`, you can add both the Go Houndify SDK and example app.
+Once you have set your `$GOPATH`, you can use both the Go Houndify SDK and example app.
 
 ```
 go get github.com/soundhound/houndify-sdk-go
@@ -23,7 +23,7 @@ The example app will be compiled and available at `$GOPATH/bin/houndify-sdk-go` 
 
 ## Example App
 
-`example.go` provides a working example of how to use the SDK.
+`example.go` provides a working example using the SDK.
 
 The example app features three modes of interacting with the Houndify API:
 

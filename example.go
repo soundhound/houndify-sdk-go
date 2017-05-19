@@ -141,7 +141,7 @@ func main() {
 				log.Fatalf("failed to decode hound response\n%s\n", serverResponse)
 			}
 			fmt.Print(writtenResponse, "\n\n")
-			fmt.Println("Enter another text query: ")
+			fmt.Println("Enter another text query:")
 		}
 	}
 }
