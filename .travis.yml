@@ -10,6 +10,6 @@ install:
 
 script:
   - diff <(echo -n) <(gofmt -s -d .)
-  - go vet -race ./...
+  - go vet ./...
   - ineffassign .
   - misspell -error .
