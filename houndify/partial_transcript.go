@@ -11,4 +11,6 @@ type PartialTranscript struct {
 	Duration time.Duration
 	// If this is the last partial transcript
 	Done bool
+	// True if the server side VAD triggers
+	SafeToStopAudio *bool
 }
