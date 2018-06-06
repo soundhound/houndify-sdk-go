@@ -67,6 +67,7 @@ type (
 		PartialTranscript string `json:"PartialTranscript"`
 		DurationMS        int64  `json:"DurationMS"`
 		Done              bool   `json:"Done"`
+		SafeToStopAudio   *bool  `json:"SafeToStopAudio"`
 	}
 )
 
@@ -290,9 +291,10 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 			partialChanWait.Add(1)
 			go func() {
 				partialTranscriptChan <- PartialTranscript{
-					Message:  incoming.PartialTranscript,
-					Duration: partialDuration,
-					Done:     incoming.Done,
+					Message:         incoming.PartialTranscript,
+					Duration:        partialDuration,
+					Done:            incoming.Done,
+					SafeToStopAudio: incoming.SafeToStopAudio,
 				}
 				partialChanWait.Done()
 			}()
