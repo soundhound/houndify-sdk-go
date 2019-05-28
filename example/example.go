@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	houndify "github.com/soundhound/houndify-sdk-go/houndify"
+	houndify "github.com/soundhound/houndify-sdk-go"
 )
 
 const (

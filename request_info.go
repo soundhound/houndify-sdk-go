@@ -1,4 +1,4 @@
-package houndify
+package houndify // import "github.com/soundhound/houndify-sdk-go/houndify"
 
 type requestInfo map[string]interface{}
 
