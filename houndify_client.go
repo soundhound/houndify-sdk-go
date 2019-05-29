@@ -45,6 +45,7 @@ type (
 		UserID            string
 		RequestID         string
 		RequestInfoFields map[string]interface{}
+		URL               string
 	}
 	// A VoiceRequest holds all the information needed to make a Houndify request.
 	// Create one of these per request to send and use a Client to send it.
@@ -55,6 +56,7 @@ type (
 		UserID            string
 		RequestID         string
 		RequestInfoFields map[string]interface{}
+		URL               string
 	}
 
 	// all of the Hound server JSON messages have these basic fields
@@ -102,9 +104,15 @@ func (c *Client) SetConversationState(newState interface{}) {
 // connect, failure to parse the response, or failure to update the conversation
 // state (if applicable).
 func (c *Client) TextSearch(textReq TextRequest) (string, error) {
+
+	// Use set URL, or fallback to default
+	if len(textReq.URL) == 0 {
+		textReq.URL = houndifyTextURL
+	}
+
 	// setup http request
 	body := []byte(``)
-	req, err := http.NewRequest("POST", houndifyTextURL+"?query="+url.PathEscape(textReq.Query), bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", textReq.URL+"?query="+url.PathEscape(textReq.Query), bytes.NewBuffer(body))
 	if err != nil {
 		return "", errors.New("failed to build http request: " + err.Error())
 	}
@@ -191,8 +199,12 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 // connect, failure to parse the response, or failure to update the conversation
 // state (if applicable).
 func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan PartialTranscript) (string, error) {
+	if len(voiceReq.URL) == 0 {
+		voiceReq.URL = houndifyVoiceURL
+	}
+
 	// setup http request
-	req, err := http.NewRequest("POST", houndifyVoiceURL, nil)
+	req, err := http.NewRequest("POST", voiceReq.URL, nil)
 	if err != nil {
 		return "", errors.New("failed to build http request: " + err.Error())
 	}
