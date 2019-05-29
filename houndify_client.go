@@ -35,7 +35,8 @@ type (
 		conversationState       interface{}
 		// If Verbose is true, all data sent from the server is printed to stdout, unformatted and unparsed.
 		// This includes partial transcripts, errors, HTTP headers details (status code, headers, etc.), and final response JSON.
-		Verbose bool
+		Verbose    bool
+		HttpClient *http.Client
 	}
 	// A TextRequest holds all the information needed to make a Houndify request.
 	// Create one of these per request to send and use a Client to send it.
@@ -152,8 +153,10 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 	}
 	req.Header.Set("Hound-Request-Info", string(requestInfoJSON))
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	if c.HttpClient == nil {
+		c.HttpClient = &http.Client{}
+	}
+	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return "", errors.New("failed to successfully run request: " + err.Error())
 	}
@@ -245,11 +248,14 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	req.Header.Set("Hound-Request-Info", string(requestInfoJSON))
 
 	req.Body = ioutil.NopCloser(voiceReq.AudioStream)
-	client := &http.Client{}
+
+	if c.HttpClient == nil {
+		c.HttpClient = &http.Client{}
+	}
 
 	// send the request
 
-	resp, err := client.Do(req)
+	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return "", errors.New("failed to successfully run request: " + err.Error())
 	}
