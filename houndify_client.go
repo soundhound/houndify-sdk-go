@@ -1,4 +1,4 @@
-package houndify // import "github.com/soundhound/houndify-sdk-go/houndify"
+package houndify
 
 import (
 	"bufio"
