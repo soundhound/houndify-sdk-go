@@ -19,7 +19,7 @@ Once you have set your `$GOPATH`, you can use both the Go Houndify SDK and examp
 go get github.com/soundhound/houndify-sdk-go
 ```
 
-The example app will be compiled and available at `$GOPATH/bin/houndify-sdk-go` and the SDK will be ready to import and use.
+The example app will be compiled and available at `$GOPATH/bin/houndify-sdk-go` and the SDK will be ready to import and use.  
 
 ## Example App
 
@@ -62,11 +62,11 @@ Instead of using the `--id` and `--key` flags, you may set the environment varia
 
 ## Using the SDK
 
-To use the SDK, you must import the package
+To use the SDK, you must import the `houndify` package:
 
 ```go
 import (
-    houndify "github.com/soundhound/houndify-sdk-go/houndify"
+    "github.com/soundhound/houndify-sdk-go"
 )
 ```
 
