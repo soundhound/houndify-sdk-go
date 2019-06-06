@@ -14,4 +14,4 @@ install:
   - go get ./...
 
 script:
-  - go build
+  - go test

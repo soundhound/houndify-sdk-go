@@ -2,14 +2,12 @@ package houndify
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,29 +33,9 @@ type (
 		conversationState       interface{}
 		// If Verbose is true, all data sent from the server is printed to stdout, unformatted and unparsed.
 		// This includes partial transcripts, errors, HTTP headers details (status code, headers, etc.), and final response JSON.
-		Verbose    bool
-		HttpClient *http.Client
-	}
-	// A TextRequest holds all the information needed to make a Houndify request.
-	// Create one of these per request to send and use a Client to send it.
-	TextRequest struct {
-		// The text query, e.g. "what time is it in london"
-		Query             string
-		UserID            string
-		RequestID         string
-		RequestInfoFields map[string]interface{}
-		URL               string
-	}
-	// A VoiceRequest holds all the information needed to make a Houndify request.
-	// Create one of these per request to send and use a Client to send it.
-	VoiceRequest struct {
-		// Stream of audio in bytes. It must already be in correct encoding.
-		// See the Houndify docs for details.
-		AudioStream       io.Reader
-		UserID            string
-		RequestID         string
-		RequestInfoFields map[string]interface{}
-		URL               string
+		Verbose           bool
+		HttpClient        *http.Client
+		RequestInfoInBody bool
 	}
 
 	// all of the Hound server JSON messages have these basic fields
@@ -106,52 +84,10 @@ func (c *Client) SetConversationState(newState interface{}) {
 // state (if applicable).
 func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 
-	// Use set URL, or fallback to default
-	if len(textReq.URL) == 0 {
-		textReq.URL = houndifyTextURL
-	}
-
-	// setup http request
-	body := []byte(``)
-	req, err := http.NewRequest("POST", textReq.URL+"?query="+url.PathEscape(textReq.Query), bytes.NewBuffer(body))
+	req, err := BuildRequest(&textReq, *c)
 	if err != nil {
-		return "", errors.New("failed to build http request: " + err.Error())
+		return "", err
 	}
-	// auth headers
-	req.Header.Set("User-Agent", SDKUserAgent)
-	clientAuth, requestAuth, timestamp, err := generateAuthValues(c.ClientID, c.ClientKey, textReq.UserID, textReq.RequestID)
-	if err != nil {
-		return "", errors.New("failed to create auth headers: " + err.Error())
-	}
-	req.Header.Set("Hound-Request-Authentication", requestAuth)
-	req.Header.Set("Hound-Client-Authentication", clientAuth)
-
-	// optional language headers
-	if val, ok := textReq.RequestInfoFields["InputLanguageEnglishName"]; ok {
-		req.Header.Set("Hound-Input-Language-English-Name", val.(string))
-	}
-	if val, ok := textReq.RequestInfoFields["InputLanguageIETFTag"]; ok {
-		req.Header.Set("Hound-Input-Language-IETF-Tag", val.(string))
-	}
-
-	// conversation state
-	if c.enableConversationState {
-		textReq.RequestInfoFields["ConversationState"] = c.conversationState
-	} else {
-		var emptyConvState interface{}
-		textReq.RequestInfoFields["ConversationState"] = emptyConvState
-	}
-
-	// request info json
-	requestInfo, err := createRequestInfo(c.ClientID, textReq.RequestID, timestamp, textReq.RequestInfoFields)
-	if err != nil {
-		return "", errors.New("failed to create request info: " + err.Error())
-	}
-	requestInfoJSON, err := json.Marshal(requestInfo)
-	if err != nil {
-		return "", errors.New("failed to create request info: " + err.Error())
-	}
-	req.Header.Set("Hound-Request-Info", string(requestInfoJSON))
 
 	if c.HttpClient == nil {
 		c.HttpClient = &http.Client{}
@@ -161,7 +97,7 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 		return "", errors.New("failed to successfully run request: " + err.Error())
 	}
 
-	body, err = ioutil.ReadAll(resp.Body)
+	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return "", errors.New("failed to read body: " + err.Error())
 	}
@@ -183,7 +119,7 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 	if c.enableConversationState {
 		newConvState, err := parseConversationState(bodyStr)
 		if err != nil {
-			return bodyStr, errors.New("unable to parse new conversation state from response")
+			return bodyStr, errors.Wrap(err, "unable to parse new conversation state from response")
 		}
 		c.conversationState = newConvState
 	}
@@ -202,51 +138,14 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 // connect, failure to parse the response, or failure to update the conversation
 // state (if applicable).
 func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan PartialTranscript) (string, error) {
-	if len(voiceReq.URL) == 0 {
-		voiceReq.URL = houndifyVoiceURL
-	}
 
-	// setup http request
-	req, err := http.NewRequest("POST", voiceReq.URL, nil)
+	// Ensure that RequestInfoInBody isn't set for VoiceRequests because the Audio stream
+	// has to go into the body
+	c.RequestInfoInBody = false
+	req, err := BuildRequest(&voiceReq, *c)
 	if err != nil {
-		return "", errors.New("failed to build http request: " + err.Error())
+		return "", err
 	}
-	// auth headers
-	req.Header.Set("User-Agent", SDKUserAgent)
-	clientAuth, requestAuth, timestamp, err := generateAuthValues(c.ClientID, c.ClientKey, voiceReq.UserID, voiceReq.RequestID)
-	if err != nil {
-		return "", errors.New("failed to create auth headers: " + err.Error())
-	}
-	req.Header.Set("Hound-Request-Authentication", requestAuth)
-	req.Header.Set("Hound-Client-Authentication", clientAuth)
-
-	// optional language headers
-	if val, ok := voiceReq.RequestInfoFields["InputLanguageEnglishName"]; ok {
-		req.Header.Set("InputLanguageEnglishName", val.(string))
-	}
-	if val, ok := voiceReq.RequestInfoFields["InputLanguageIETFTag"]; ok {
-		req.Header.Set("InputLanguageIETFTag", val.(string))
-	}
-
-	// conversation state
-	if c.enableConversationState {
-		voiceReq.RequestInfoFields["ConversationState"] = c.conversationState
-	} else {
-		var emptyConvState interface{}
-		voiceReq.RequestInfoFields["ConversationState"] = emptyConvState
-	}
-
-	// request info json
-	requestInfo, err := createRequestInfo(c.ClientID, voiceReq.RequestID, timestamp, voiceReq.RequestInfoFields)
-	if err != nil {
-		return "", errors.New("failed to create request info: " + err.Error())
-	}
-	requestInfoJSON, err := json.Marshal(requestInfo)
-	if err != nil {
-		return "", errors.New("failed to create request info: " + err.Error())
-	}
-	req.Header.Set("Hound-Request-Info", string(requestInfoJSON))
-
 	req.Body = ioutil.NopCloser(voiceReq.AudioStream)
 
 	if c.HttpClient == nil {
@@ -254,7 +153,6 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	}
 
 	// send the request
-
 	resp, err := c.HttpClient.Do(req)
 	if err != nil {
 		return "", errors.New("failed to successfully run request: " + err.Error())
@@ -338,7 +236,7 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	if c.enableConversationState {
 		newConvState, err := parseConversationState(bodyStr)
 		if err != nil {
-			return bodyStr, errors.New("unable to parse new conversation state from response")
+			return bodyStr, errors.Wrap(err, "unable to parse new conversation state from response")
 		}
 		c.conversationState = newConvState
 	}

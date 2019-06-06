@@ -10,6 +10,12 @@ import (
 	"time"
 )
 
+type authInfo struct {
+	houndClientAuth  string
+	houndRequestAuth string
+	timeStamp        int64
+}
+
 func generateAuthValues(clientID, clientKey, userID, requestID string) (
 	houndClientAuth, houndRequestAuth string, timeStamp int64, returnErr error) {
 

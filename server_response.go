@@ -2,8 +2,8 @@ package houndify
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
+	"github.com/pkg/errors"
 	"strings"
 )
 
@@ -39,6 +39,10 @@ func parseConversationState(serverResponseJSON string) (interface{}, error) {
 	}
 	if result["NumToReturn"].(float64) < 1 {
 		return nil, errors.New("no results to return")
+	}
+
+	if len(result["AllResults"].([]interface{})) < 1 {
+		return nil, errors.New("empty server response")
 	}
 	return result["AllResults"].([]interface{})[0].(map[string]interface{})["ConversationState"], nil
 }
