@@ -1,3 +1,7 @@
+## v0.3.2 2019-06-19
+Changes:
+* Updated the example audio files provided in the test_audio directory   
+
 ## v0.3.1 2019-06-06
 Features:
 *  Allow sending Request-Info in request body instead of in header
