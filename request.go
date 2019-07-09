@@ -74,12 +74,23 @@ func BuildRequest(houndReq requestable, c Client) (*http.Request, error) {
 	reqInfo := houndReq.GetRequestInfo()
 	reqInfo["TimeStamp"] = auth.timeStamp
 
-	// Set optional Language headers
-	if val, ok := reqInfo["InputLanguageEnglishName"]; ok {
-		req.Header.Set("InputLanguageEnglishName", val.(string))
+	// Set optional Language headers. Note golang converts headers set through
+	// Header.Set() too the Canonical MIME format. Avoid this by setting manually.
+	// The header names have a slightly different format, so transform them if they exist
+	// in the reqInfo.
+	langHeaders := map[string]string{
+		"InputLanguageEnglishName":  "Hound-Input-Language-English-Name",
+		"InputLanguageIETFTag":      "Hound-Input-Language-IETF-Tag",
+		"InputLanguageNativeName":   "Hound-Input-Language-Native-Name",
+		"OutputLanguageEnglishName": "Hound-Output-Language-English-Name",
+		"OutputLanguageIETFTag":     "Hound-Output-Language-IETF-Tag",
+		"OutputLanguageNativeName":  "Hound-Output-Language-Native-Name",
 	}
-	if val, ok := reqInfo["InputLanguageIETFTag"]; ok {
-		req.Header.Set("InputLanguageIETFTag", val.(string))
+
+	for input, output := range langHeaders {
+		if val, ok := reqInfo[input]; ok {
+			req.Header[output] = []string{val.(string)}
+		}
 	}
 
 	// Enable conversation state
