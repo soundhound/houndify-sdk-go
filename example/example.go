@@ -6,10 +6,13 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"github.com/go-audio/wav"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	houndify "github.com/soundhound/houndify-sdk-go"
 )
@@ -33,6 +36,7 @@ func main() {
 	voiceFlag := flag.String("voice", "", "Audio file to use for voice query")
 	textFlag := flag.String("text", "", "Message to use for text query")
 	stdinFlag := flag.Bool("stdin", false, "Text query via stdin messages")
+	streamFlag := flag.Bool("stream", false, "Stream audio file in real time to server, used with --voice")
 	verboseFlag := flag.Bool("v", false, "Verbose mode, which prints raw server data")
 	flag.Parse()
 
@@ -67,7 +71,7 @@ func main() {
 	default:
 		log.Fatalf("must choose either voice, text or stdin")
 
-	case *voiceFlag != "":
+	case *voiceFlag != "" && !*streamFlag:
 		// voice query
 		audioFilePath := *voiceFlag
 		fileContents, err := ioutil.ReadFile(audioFilePath)
@@ -143,7 +147,104 @@ func main() {
 			fmt.Print(writtenResponse, "\n\n")
 			fmt.Println("Enter another text query:")
 		}
+
+	case *voiceFlag != "" && *streamFlag:
+		StreamAudio(client, *voiceFlag, userID)
 	}
+}
+
+// Stream an audio file to the server. This example demonstrates streaming a wav file,
+// however this could easily be changed to stream audio from a microphone or something.
+// Basically it just writes data from a buffer to the Request body every 1 second. The
+// advantage of how golang has the http.Request's Body field is it's a Reader, so using
+// io.Pipe() you can actually write any data into it. That means any stream of WAV data
+// can just be piped in, and the requests will be made.
+//
+// This function also demonstrates how you can use the SafeToStopAudio flag to know when
+// the server has all the data it needs.
+func StreamAudio(client houndify.Client, fname, uid string) {
+	f, err := os.Open(fname)
+	defer f.Close()
+	if err != nil {
+		log.Fatalf("failed to read contents of file %q, err: %v\n", fname, err)
+	}
+
+	// Read WAV file data, determine bytes per second
+	d := wav.NewDecoder(f)
+	d.ReadInfo()
+
+	// Use 1 second chunks
+	bps := int(d.AvgBytesPerSec) * 1
+
+	// Build pipe that lets us write into the io.Reader that is in the request
+	rp, wp := io.Pipe()
+
+	req := houndify.VoiceRequest{
+		AudioStream: rp,
+		UserID:      uid,
+		RequestID:   createRequestID(),
+	}
+
+	// Start the function to write 1 second of data per 1 real second, by using a buffer
+	// that is the size of 1 second of data. Note that using the .Read() function results
+	// in the header portion of the file not being read. We have to use the ReadAt()
+	// function to specify starting at the very first position of the actual file, or the
+	// header isn't read.
+	var loc int64 = 0
+	buf := make([]byte, bps)
+	done := make(chan bool)
+	go func(wp *io.PipeWriter) {
+		defer wp.Close()
+
+		for {
+			select {
+			case <-done:
+				//fmt.Println("Exiting write loop")
+				return
+			default:
+				n, err := f.ReadAt(buf, loc)
+				loc += int64(n)
+
+				// At the EOF, the buffer will still have bytes read into it, have to write
+				// those out before breaking the loop
+				if err == io.EOF {
+					wp.Write(buf[:n])
+					return
+				}
+
+				// Write the amount of bytes that were read in
+				wp.Write(buf[:n])
+				time.Sleep(time.Duration(1) * time.Second)
+			}
+		}
+	}(wp)
+
+	// listen for partial transcript responses
+	partialTranscripts := make(chan houndify.PartialTranscript)
+	go func() {
+		for partial := range partialTranscripts {
+			if partial.SafeToStopAudio != nil && *partial.SafeToStopAudio == true {
+				fmt.Println("Safe to stop audio recieved")
+				if done != nil {
+					done <- true
+				}
+				return
+			}
+			if partial.Message != "" { // ignore the "" partial transcripts, not really useful
+				fmt.Println(partial.Message)
+			}
+		}
+	}()
+
+	serverResponse, err := client.VoiceSearch(req, partialTranscripts)
+	if err != nil {
+		log.Fatalf("failed to make voice request: %v\n%s\n", err, serverResponse)
+	}
+	writtenResponse, err := houndify.ParseWrittenResponse(serverResponse)
+	if err != nil {
+		log.Fatalf("failed to decode hound response\n%s\n", serverResponse)
+	}
+	fmt.Println(writtenResponse)
 }
 
 // Creates a pseudo unique/random request ID.

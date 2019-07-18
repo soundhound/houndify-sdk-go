@@ -2,6 +2,7 @@ package houndify
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -20,6 +21,12 @@ type TextRequest struct {
 	RequestID         string
 	RequestInfoFields map[string]interface{}
 	URL               string
+
+	// Extra header that should be added to http request
+	headers map[string]string
+
+	// Context variable, should only be set through the WithContext() function
+	ctx context.Context
 }
 
 // A VoiceRequest holds all the information needed to make a Houndify request.
@@ -32,6 +39,12 @@ type VoiceRequest struct {
 	RequestID         string
 	RequestInfoFields map[string]interface{}
 	URL               string
+
+	// Extra header that should be added to http request
+	headers map[string]string
+
+	// Context variable, should only be set through the WithContext() function
+	ctx context.Context
 }
 
 // Generic interface for the different types of requests
@@ -47,7 +60,7 @@ type requestable interface {
 
 	// Wrapper for the createRequestInfo() function call, as like generateAuthValues() it
 	// requires information from the underlying struct
-	RequestInfo(Client) (requestInfo, error)
+	RequestInfo(Client, requestInfo) (requestInfo, error)
 
 	// Return the underlying RequestInfo representation. Note that since it's held as a
 	// map changing this will also change the underlying struct's values.
@@ -71,7 +84,12 @@ func BuildRequest(houndReq requestable, c Client) (*http.Request, error) {
 	req.Header.Set("Hound-Request-Authentication", auth.houndRequestAuth)
 	req.Header.Set("Hound-Client-Authentication", auth.houndClientAuth)
 
+	//
 	reqInfo := houndReq.GetRequestInfo()
+	if reqInfo == nil {
+		reqInfo = make(map[string]interface{})
+	}
+
 	reqInfo["TimeStamp"] = auth.timeStamp
 
 	// Set the language headers based on provided fields in reqInfo
@@ -96,7 +114,7 @@ func BuildRequest(houndReq requestable, c Client) (*http.Request, error) {
 		reqInfo["ConversationState"] = emptyConvState
 	}
 
-	requestInfo, err := houndReq.RequestInfo(c)
+	requestInfo, err := houndReq.RequestInfo(c, reqInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +167,24 @@ func (r *TextRequest) AuthInfo(c Client) (authInfo, error) {
 	}, err
 }
 
-func (r *TextRequest) RequestInfo(c Client) (requestInfo, error) {
+func (r *TextRequest) RequestInfo(c Client, reqInfo requestInfo) (requestInfo, error) {
+	if r.RequestInfoFields == nil {
+		r.RequestInfoFields = reqInfo
+	}
 	timestamp := r.RequestInfoFields["TimeStamp"].(int64)
 	return createRequestInfo(c.ClientID, r.RequestID, timestamp, r.RequestInfoFields)
 }
 
 func (r *TextRequest) GetRequestInfo() map[string]interface{} {
 	return r.RequestInfoFields
+}
+
+func (r *TextRequest) WithContext(ctx context.Context) {
+	r.ctx = ctx
+}
+
+func (r *TextRequest) Headers(headers map[string]string) {
+	r.headers = headers
 }
 
 func (r *VoiceRequest) NewRequest() (*http.Request, error) {
@@ -181,11 +210,22 @@ func (r *VoiceRequest) AuthInfo(c Client) (authInfo, error) {
 	}, err
 }
 
-func (r *VoiceRequest) RequestInfo(c Client) (requestInfo, error) {
+func (r *VoiceRequest) RequestInfo(c Client, reqInfo requestInfo) (requestInfo, error) {
+	if r.RequestInfoFields == nil {
+		r.RequestInfoFields = reqInfo
+	}
 	timestamp := r.RequestInfoFields["TimeStamp"].(int64)
 	return createRequestInfo(c.ClientID, r.RequestID, timestamp, r.RequestInfoFields)
 }
 
 func (r *VoiceRequest) GetRequestInfo() map[string]interface{} {
 	return r.RequestInfoFields
+}
+
+func (r *VoiceRequest) WithContext(ctx context.Context) {
+	r.ctx = ctx
+}
+
+func (r *VoiceRequest) Headers(headers map[string]string) {
+	r.headers = headers
 }

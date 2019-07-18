@@ -48,6 +48,7 @@ type (
 		PartialTranscript string `json:"PartialTranscript"`
 		DurationMS        int64  `json:"DurationMS"`
 		Done              bool   `json:"Done"`
+		SafeToStopAudio   *bool  `json:"SafeToStopAudio"`
 	}
 )
 
@@ -85,6 +86,17 @@ func (c *Client) SetConversationState(newState interface{}) {
 func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 
 	req, err := BuildRequest(&textReq, *c)
+
+	// Add the TexRequest's context to the http request
+	if textReq.ctx != nil {
+		req = req.WithContext(textReq.ctx)
+	}
+
+	// Set the extra client headers
+	for k, v := range textReq.headers {
+		req.Header.Set(k, v)
+	}
+
 	if err != nil {
 		return "", err
 	}
@@ -143,6 +155,15 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	// has to go into the body
 	c.RequestInfoInBody = false
 	req, err := BuildRequest(&voiceReq, *c)
+	if voiceReq.ctx != nil {
+		req = req.WithContext(voiceReq.ctx)
+	}
+
+	// Set the extra client headers
+	for k, v := range voiceReq.headers {
+		req.Header.Set(k, v)
+	}
+
 	if err != nil {
 		return "", err
 	}
@@ -206,9 +227,10 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 			partialChanWait.Add(1)
 			go func() {
 				partialTranscriptChan <- PartialTranscript{
-					Message:  incoming.PartialTranscript,
-					Duration: partialDuration,
-					Done:     incoming.Done,
+					Message:         incoming.PartialTranscript,
+					Duration:        partialDuration,
+					Done:            incoming.Done,
+					SafeToStopAudio: incoming.SafeToStopAudio,
 				}
 				partialChanWait.Done()
 			}()

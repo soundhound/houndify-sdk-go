@@ -10,5 +10,6 @@ type PartialTranscript struct {
 	// Length of audio this partial transcript applies to
 	Duration time.Duration
 	// If this is the last partial transcript
-	Done bool
+	Done            bool
+	SafeToStopAudio *bool
 }
