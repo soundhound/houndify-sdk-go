@@ -3,18 +3,21 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"github.com/go-audio/wav"
+	houndify "github.com/soundhound/houndify-sdk-go"
 	"io"
 	"io/ioutil"
 	"log"
+	"net/http/httptrace"
+	"net/textproto"
 	"os"
 	"strings"
 	"time"
-
-	houndify "github.com/soundhound/houndify-sdk-go"
 )
 
 const (
@@ -38,6 +41,7 @@ func main() {
 	stdinFlag := flag.Bool("stdin", false, "Text query via stdin messages")
 	streamFlag := flag.Bool("stream", false, "Stream audio file in real time to server, used with --voice")
 	verboseFlag := flag.Bool("v", false, "Verbose mode, which prints raw server data")
+	traceFlag := flag.Bool("trace", false, "Enable http client tracing")
 	flag.Parse()
 
 	// Make log not print out time info
@@ -86,6 +90,12 @@ func main() {
 			RequestInfoFields: make(map[string]interface{}),
 		}
 
+		ctx := context.Background()
+		req.WithContext(ctx)
+		if *traceFlag {
+			req.WithContext(httptrace.WithClientTrace(ctx, getDefaultClientTrace()))
+		}
+
 		// listen for partial transcript responses
 		partialTranscripts := make(chan houndify.PartialTranscript)
 		go func() {
@@ -113,6 +123,11 @@ func main() {
 			UserID:            userID,
 			RequestID:         createRequestID(),
 			RequestInfoFields: make(map[string]interface{}),
+		}
+		ctx := context.Background()
+		req.WithContext(ctx)
+		if *traceFlag {
+			req.WithContext(httptrace.WithClientTrace(ctx, getDefaultClientTrace()))
 		}
 		serverResponse, err := client.TextSearch(req)
 		if err != nil {
@@ -266,4 +281,57 @@ func derefOrFetchFromEnv(strPtr *string, envKey string) string {
 		return *strPtr
 	}
 	return os.Getenv(envKey)
+}
+
+func getDefaultClientTrace() *httptrace.ClientTrace {
+	traceLogger := log.New(os.Stdout, "[httptrace] ", log.Ltime | log.Lmicroseconds)
+	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			traceLogger.Println("GotConn: ", info)
+		},
+		PutIdleConn: func(err error) {
+			traceLogger.Println("PutIdleConn: ", err)
+		},
+		GotFirstResponseByte: func() {
+			traceLogger.Println("GotFirstResponseByte")
+		},
+		Got100Continue: func() {
+			traceLogger.Println("Got100Continue")
+		},
+		Got1xxResponse: func(code int, header textproto.MIMEHeader) error {
+			traceLogger.Println("Got1xxResponse: ", code, header)
+			return nil
+		},
+		DNSStart: func(info httptrace.DNSStartInfo) {
+			traceLogger.Println("DNSStart: ", info)
+		},
+		DNSDone: func(info httptrace.DNSDoneInfo) {
+			traceLogger.Println("DNSDone: ", info)
+		},
+		ConnectStart: func(network, addr string) {
+			traceLogger.Println("ConnectStart: ", addr)
+		},
+		ConnectDone: func(network, addr string, err error) {
+			traceLogger.Println("ConnectDone: ", network, addr, err)
+		},
+		TLSHandshakeStart: func() {
+			traceLogger.Println("TLSHandshakeStart")
+		},
+		TLSHandshakeDone: func(state tls.ConnectionState, err error) {
+			traceLogger.Println("TLSHandshakeDone: ", state, err)
+		},
+		WroteHeaderField: func(key string, value []string) {
+			traceLogger.Println("WroteHeaderField: ", key, value)
+		},
+		WroteHeaders: func() {
+			traceLogger.Println("WroteHeaders")
+		},
+		Wait100Continue: func() {
+			traceLogger.Println("Wait100Continue")
+		},
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			traceLogger.Println("WroteRequest: ", info)
+		},
+	}
+	return trace
 }
