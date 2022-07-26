@@ -151,6 +151,17 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 // state (if applicable).
 func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan PartialTranscript) (string, error) {
 
+	//so the partial transcript channel doesn't get closed before all transcripts are sent
+	partialChanWait := sync.WaitGroup{}
+
+	defer func() {
+		go func() {
+			//don't close the open partial transcript channel
+			partialChanWait.Wait()
+			close(partialTranscriptChan)
+		}()
+	}()
+
 	// Ensure that RequestInfoInBody isn't set for VoiceRequests because the Audio stream
 	// has to go into the body
 	c.RequestInfoInBody = false
@@ -186,8 +197,6 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 
 	// partial transcript parsing
 
-	//so the partial transcript channel doesn't get closed before all transcripts are sent
-	partialChanWait := sync.WaitGroup{}
 	reader := bufio.NewReader(resp.Body)
 	var line string
 	for {
@@ -241,11 +250,6 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 			break
 		}
 	}
-	go func() {
-		//don't close the open partial transcript channel
-		partialChanWait.Wait()
-		close(partialTranscriptChan)
-	}()
 
 	bodyStr := line
 	defer resp.Body.Close()
