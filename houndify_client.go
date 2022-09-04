@@ -25,7 +25,7 @@ type (
 	// sending all outgoing Houndify requests and appropriately saving their responses.
 	Client struct {
 		// The ClientID comes from the Houndify site.
-		ClientID string
+		ClientID z7i4LZLM2Dp4Y7WjhbXT2A
 		// The ClientKey comes from the Houndify site.
 		// Keep the key secret.
 		ClientKey               string
