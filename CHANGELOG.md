@@ -1,3 +1,17 @@
+## v0.4.1 2026-03-23
+Changes:
+* Reduce streamed audio packetization from 1 second to smaller realtime intervals for faster partial transcripts and SafeToStopAudio handling.
+* Add GetLPCMStreamInfo to centralize LPCM chunk-size and streaming-interval calculation.
+* Validate LPCM inputs more strictly (numChans, bitDepth, sampleRate, and targetStreamIntervalMs).
+* Refactor the example streamer to use the shared LPCM stream info helper.
+* Add isolated table-driven tests covering expected chunk sizes and streaming intervals for multiple sample rates and intervals, plus invalid-input cases.
+* Replaced the timer.Sleep() to ticker in audio streaming example - to avoid any drifts over time. This change will also help prevent writing any chunks after SafeToStopAudio has been received.
+* Other upgrades:
+  * Update go version to 1.26
+  * Remove usage of deprecated io/ioutil
+  * Remove usage of deprecated github.com/pkg/errors
+  * Replace gotest.tools/assert with github.com/stretchr/testify/assert
+
 ## v0.3.4 2019-07-17
 Features:
 * Pass the SafeToStopAudio flag recieved from the server with the PartialTranscript (See

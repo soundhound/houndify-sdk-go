@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -138,7 +137,7 @@ func BuildRequest(houndReq requestable, c Client) (*http.Request, error) {
 		if err != nil {
 			return nil, errors.New("failed to create request info: " + err.Error())
 		}
-		req.Body = ioutil.NopCloser(bytes.NewBuffer(requestInfoJSON))
+		req.Body = io.NopCloser(bytes.NewBuffer(requestInfoJSON))
 	}
 	return req, nil
 }

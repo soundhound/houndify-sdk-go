@@ -3,10 +3,9 @@ package houndify
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strconv"
 	"strings"
@@ -109,7 +108,7 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 		return "", errors.New("failed to successfully run request: " + err.Error())
 	}
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", errors.New("failed to read body: " + err.Error())
 	}
@@ -131,7 +130,7 @@ func (c *Client) TextSearch(textReq TextRequest) (string, error) {
 	if c.enableConversationState {
 		newConvState, err := parseConversationState(bodyStr)
 		if err != nil {
-			return bodyStr, errors.Wrap(err, "unable to parse new conversation state from response")
+			return bodyStr, fmt.Errorf("unable to parse new conversation state from response: %w", err)
 		}
 		c.conversationState = newConvState
 	}
@@ -178,7 +177,7 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	if err != nil {
 		return "", err
 	}
-	req.Body = ioutil.NopCloser(voiceReq.AudioStream)
+	req.Body = io.NopCloser(voiceReq.AudioStream)
 
 	if c.HttpClient == nil {
 		c.HttpClient = &http.Client{}
@@ -262,7 +261,7 @@ func (c *Client) VoiceSearch(voiceReq VoiceRequest, partialTranscriptChan chan P
 	if c.enableConversationState {
 		newConvState, err := parseConversationState(bodyStr)
 		if err != nil {
-			return bodyStr, errors.Wrap(err, "unable to parse new conversation state from response")
+			return bodyStr, fmt.Errorf("unable to parse new conversation state from response: %w", err)
 		}
 		c.conversationState = newConvState
 	}

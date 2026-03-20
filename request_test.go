@@ -2,11 +2,12 @@ package houndify_test
 
 import (
 	"bytes"
-	. "github.com/soundhound/houndify-sdk-go"
-	"gotest.tools/assert"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"testing"
+
+	. "github.com/soundhound/houndify-sdk-go"
+	"github.com/stretchr/testify/assert"
 )
 
 type RoundTripFunc func(req *http.Request) *http.Response
@@ -66,14 +67,14 @@ func TestNewTextRequest(t *testing.T) {
 		assert.Equal(t, req.URL.String(), "http://test.com/v1/text?query=what%20is%20the%20time")
 		return &http.Response{
 			StatusCode: 200,
-			Body:       ioutil.NopCloser(bytes.NewBufferString(`No clue`)),
+			Body:       io.NopCloser(bytes.NewBufferString(`No clue`)),
 			Header:     make(http.Header),
 		}
 	})
 
 	textReq := NewTestTextRequest()
 	req, err := textReq.NewRequest()
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	mockClient.Do(req)
 }
 
@@ -85,14 +86,14 @@ func TestNewVoiceRequest(t *testing.T) {
 		assert.Equal(t, req.URL.String(), "http://test.com/v1/voice")
 		return &http.Response{
 			StatusCode: 200,
-			Body:       ioutil.NopCloser(bytes.NewBufferString(`No clue`)),
+			Body:       io.NopCloser(bytes.NewBufferString(`No clue`)),
 			Header:     make(http.Header),
 		}
 	})
 
 	voiceReq := NewTestVoiceRequest()
 	req, err := voiceReq.NewRequest()
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	mockClient.Do(req)
 }
 
@@ -101,8 +102,8 @@ func TestNewVoiceRequest(t *testing.T) {
 // - User Agent is set properly
 // - Headers all exist that are set
 // - TODO:
-//  	- RequestInfo verification
-//  	- Find way to mock Auth stuff so dynamic auth headers (they change with time etc)
+//   - RequestInfo verification
+//   - Find way to mock Auth stuff so dynamic auth headers (they change with time etc)
 func TestBuildTextRequest(t *testing.T) {
 
 	var expectedVals = map[string]string{
@@ -124,6 +125,6 @@ func TestBuildTextRequest(t *testing.T) {
 	textReq := NewTestTextRequest()
 	houndifyClient := NewTestHoundifyClient(mockClient)
 	req, err := BuildRequest(&textReq, houndifyClient)
-	assert.NilError(t, err)
+	assert.NoError(t, err)
 	mockClient.Do(req)
 }

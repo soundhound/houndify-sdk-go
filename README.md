@@ -6,7 +6,7 @@ The SDK allows you to make voice and text queries to the Houndify API. The SDK c
 
 ## Requirements
 
-- Go v1.8+
+- Go v1.26+
 - Houndify account available from [Houndify.com](https://www.houndify.com)
 
 ## Installing
