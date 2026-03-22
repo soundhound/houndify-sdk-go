@@ -8,16 +8,16 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"github.com/go-audio/wav"
-	houndify "github.com/soundhound/houndify-sdk-go"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http/httptrace"
 	"net/textproto"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-audio/wav"
+	houndify "github.com/soundhound/houndify-sdk-go"
 )
 
 const (
@@ -78,7 +78,7 @@ func main() {
 	case *voiceFlag != "" && !*streamFlag:
 		// voice query
 		audioFilePath := *voiceFlag
-		fileContents, err := ioutil.ReadFile(audioFilePath)
+		fileContents, err := os.ReadFile(audioFilePath)
 		if err != nil {
 			log.Fatalf("failed to read contents of file %q, err: %v", audioFilePath, err)
 		}
@@ -168,28 +168,35 @@ func main() {
 	}
 }
 
-// Stream an audio file to the server. This example demonstrates streaming a wav file,
-// however this could easily be changed to stream audio from a microphone or something.
-// Basically it just writes data from a buffer to the Request body every 1 second. The
-// advantage of how golang has the http.Request's Body field is it's a Reader, so using
-// io.Pipe() you can actually write any data into it. That means any stream of WAV data
-// can just be piped in, and the requests will be made.
+// Streams audio to the server using a WAV file as the source. While this example
+// uses a file, the same pattern can be used for other sources like a microphone.
 //
-// This function also demonstrates how you can use the SafeToStopAudio flag to know when
-// the server has all the data it needs.
+// Audio is sent in frame-aligned chunks at a realtime interval to better reflect
+// live streaming behavior.
+//
+// The request body is backed by an io.Pipe, which allows arbitrary data to be
+// written as a stream. This makes it easy to feed any WAV audio source directly
+// into the request as it becomes available.
+//
+// The function also shows how to use the SafeToStopAudio signal to determine when
+// the server has received enough audio and no more data needs to be sent.
 func StreamAudio(client houndify.Client, fname, uid string) {
 	f, err := os.Open(fname)
-	defer f.Close()
 	if err != nil {
 		log.Fatalf("failed to read contents of file %q, err: %v\n", fname, err)
 	}
+	defer f.Close()
 
 	// Read WAV file data, determine bytes per second
 	d := wav.NewDecoder(f)
 	d.ReadInfo()
 
-	// Use 1 second chunks
-	bps := int(d.AvgBytesPerSec) * 1
+	targetStreamingIntervalMs := 20
+	streamInfo, err := houndify.GetLPCMStreamInfo(int(d.NumChans),
+		int(d.BitDepth), int(d.SampleRate), targetStreamingIntervalMs)
+	if err != nil {
+		log.Fatalf("failed to get LPCM chunk info: %v", err)
+	}
 
 	// Build pipe that lets us write into the io.Reader that is in the request
 	rp, wp := io.Pipe()
@@ -200,36 +207,46 @@ func StreamAudio(client houndify.Client, fname, uid string) {
 		RequestID:   createRequestID(),
 	}
 
-	// Start the function to write 1 second of data per 1 real second, by using a buffer
-	// that is the size of 1 second of data. Note that using the .Read() function results
+	// Start the function to stream audio in realtime
+	// Note that using the .Read() function results
 	// in the header portion of the file not being read. We have to use the ReadAt()
 	// function to specify starting at the very first position of the actual file, or the
 	// header isn't read.
-	var loc int64 = 0
-	buf := make([]byte, bps)
 	done := make(chan bool)
 	go func(wp *io.PipeWriter) {
 		defer wp.Close()
 
+		var (
+			loc    int64 = 0
+			buf          = make([]byte, streamInfo.ChunkSize())
+			ticker       = time.NewTicker(streamInfo.StreamingInterval())
+		)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-done:
-				//fmt.Println("Exiting write loop")
+				fmt.Println("Context received done, exiting write loop")
 				return
-			default:
-				n, err := f.ReadAt(buf, loc)
-				loc += int64(n)
 
-				// At the EOF, the buffer will still have bytes read into it, have to write
-				// those out before breaking the loop
-				if err == io.EOF {
+			case <-ticker.C:
+
+				n, err := f.ReadAt(buf, loc)
+
+				if n > 0 {
+					loc += int64(n)
+					// Write the amount of bytes that were read in
 					wp.Write(buf[:n])
-					return
 				}
 
-				// Write the amount of bytes that were read in
-				wp.Write(buf[:n])
-				time.Sleep(time.Duration(1) * time.Second)
+				if err != nil {
+					if err != io.EOF {
+						// handle error
+					} else {
+						fmt.Println("Reached end of file")
+					}
+					return
+				}
 			}
 		}
 	}(wp)
@@ -284,7 +301,7 @@ func derefOrFetchFromEnv(strPtr *string, envKey string) string {
 }
 
 func getDefaultClientTrace() *httptrace.ClientTrace {
-	traceLogger := log.New(os.Stdout, "[httptrace] ", log.Ltime | log.Lmicroseconds)
+	traceLogger := log.New(os.Stdout, "[httptrace] ", log.Ltime|log.Lmicroseconds)
 	trace := &httptrace.ClientTrace{
 		GotConn: func(info httptrace.GotConnInfo) {
 			traceLogger.Println("GotConn: ", info)

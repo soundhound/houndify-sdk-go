@@ -2,8 +2,8 @@ package houndify
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/pkg/errors"
 	"strings"
 )
 
